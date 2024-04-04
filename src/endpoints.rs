@@ -10,7 +10,7 @@ use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::ops::{Add, Sub};
-use std::os::unix::prelude::FileExt;
+use std::os::unix::prelude::{FileExt, MetadataExt};
 use std::panic::Location;
 use std::str::FromStr;
 use std::sync::Mutex;
@@ -99,7 +99,7 @@ pub async fn submit(
     };
 
     let len = match board_file.metadata() {
-        Ok(m) => m.len(),
+        Ok(m) => m.size(),
         Err(e) => return error(e),
     };
 
