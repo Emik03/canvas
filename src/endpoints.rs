@@ -2,6 +2,7 @@ use crate::requests::PlaceRequestBody;
 use axum::extract::ConnectInfo;
 use axum::http::StatusCode;
 use axum::Json;
+use hyper::HeaderMap;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::error::Error;
@@ -11,6 +12,7 @@ use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::ops::{Add, Sub};
 use std::os::unix::prelude::FileExt;
 use std::panic::Location;
+use std::str::FromStr;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -40,6 +42,7 @@ pub async fn board() -> (StatusCode, String) {
 }
 
 pub async fn submit(
+    headers: HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     req: Json<PlaceRequestBody>,
 ) -> (StatusCode, String) {
@@ -48,7 +51,12 @@ pub async fn submit(
         Err(e) => return error(e),
     };
 
-    let ip = match addr.ip() {
+    let ip = match headers
+        .get("x-forwarded-for")
+        .and_then(|x| x.to_str().ok())
+        .and_then(|x| IpAddr::from_str(x).ok())
+        .unwrap_or_else(|| addr.ip())
+    {
         IpAddr::V6(o) if is_global(&o) => {
             IpAddr::V6(mask_ipv6_host_identifier(o.segments()).into())
         }
@@ -109,11 +117,12 @@ pub async fn submit(
     let mut buffer = [0u8; 16];
     let mut writer = &mut buffer[..];
     let time = epoch.as_millis() as u64;
+    let pixel = [0, 0, 0, req.pixel.to_byte()];
     const MESSAGE: &str = "Writing to a 16 byte buffer should never fail";
 
     writer.write(&time.to_be_bytes()).expect(MESSAGE);
     writer.write(&req.index.to_be_bytes()).expect(MESSAGE);
-    writer.write(&[0, 0, 0, req.pixel.to_byte()]).expect(MESSAGE);
+    writer.write(&pixel).expect(MESSAGE);
 
     if let Err(e) = diff_file.write(&buffer[..]) {
         return error(e);
