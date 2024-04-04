@@ -80,9 +80,6 @@ pub async fn submit(
         }
     }
 
-    hash.insert(ip, epoch);
-    drop(hash);
-
     let board_file = match OpenOptions::new()
         .write(true)
         .create(true)
@@ -109,6 +106,9 @@ pub async fn submit(
             format!("Index must be less than {len}"),
         );
     }
+
+    hash.insert(ip, epoch);
+    drop(hash);
 
     if let Err(e) = board_file.write_at(&[req.pixel.to_byte()], req.index as u64) {
         return error(e);
